@@ -1,3 +1,4 @@
+import { get, put } from "@vercel/blob";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,11 +11,6 @@ export type Lead = {
   documentType: string;
 };
 
-type RedisPipelineResponse<T = unknown> = Array<{
-  result?: T;
-  error?: string;
-}>;
-
 export class LeadStorageError extends Error {
   constructor(message: string) {
     super(message);
@@ -24,108 +20,130 @@ export class LeadStorageError extends Error {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
-const VERCEL_KV_LEADS_KEY = process.env.VERCEL_KV_LEADS_KEY || "baodan:leads";
+const BLOB_LEADS_PATH = process.env.BLOB_LEADS_PATH || "admin/leads.json";
 
 function isProduction() {
   return process.env.NODE_ENV === "production";
 }
 
-function hasVercelKvConfig() {
-  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+function hasVercelBlobConfig() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
 export function isLeadStorageConfigured() {
-  return !isProduction() || hasVercelKvConfig();
+  return !isProduction() || hasVercelBlobConfig();
 }
 
 function assertProductionStorage() {
-  if (isProduction() && !hasVercelKvConfig()) {
+  if (isProduction() && !hasVercelBlobConfig()) {
     throw new LeadStorageError(
-      "生产环境未配置 Vercel KV，无法保存联系方式。",
+      "生产环境未连接 Vercel Blob，暂时无法保存联系方式。",
     );
   }
 }
 
-async function vercelKvPipeline<T>(commands: unknown[][]) {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-
-  if (!url || !token) {
-    throw new LeadStorageError("缺少 Vercel KV 配置。");
-  }
-
-  const response = await fetch(`${url.replace(/\/$/, "")}/pipeline`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(commands),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new LeadStorageError(`Vercel KV 请求失败：${response.status} ${text}`);
-  }
-
-  const payload = (await response.json()) as RedisPipelineResponse<T>;
-  const failed = payload.find((item) => item.error);
-
-  if (failed?.error) {
-    throw new LeadStorageError(`Vercel KV 命令失败：${failed.error}`);
-  }
-
-  return payload;
-}
-
-function parseLead(value: unknown) {
-  if (typeof value !== "string") {
+function normalizeLead(value: unknown) {
+  if (!value || typeof value !== "object") {
     return null;
   }
 
-  try {
-    const lead = JSON.parse(value) as Lead;
+  const lead = value as Partial<Lead>;
 
-    if (!lead.id || !lead.createdAt || !lead.contact) {
-      return null;
+  if (!lead.id || !lead.createdAt || !lead.contact) {
+    return null;
+  }
+
+  return {
+    id: String(lead.id),
+    createdAt: String(lead.createdAt),
+    contact: String(lead.contact),
+    question: String(lead.question ?? ""),
+    fileName: String(lead.fileName ?? ""),
+    documentType: String(lead.documentType ?? ""),
+  };
+}
+
+function normalizeLeads(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(normalizeLead).filter((lead): lead is Lead => Boolean(lead));
+}
+
+async function streamToText(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let content = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
     }
 
-    return {
-      id: String(lead.id),
-      createdAt: String(lead.createdAt),
-      contact: String(lead.contact),
-      question: String(lead.question ?? ""),
-      fileName: String(lead.fileName ?? ""),
-      documentType: String(lead.documentType ?? ""),
-    };
-  } catch {
-    return null;
+    content += decoder.decode(value, { stream: true });
+  }
+
+  content += decoder.decode();
+  return content;
+}
+
+async function readBlobLeads() {
+  try {
+    const result = await get(BLOB_LEADS_PATH, {
+      access: "private",
+      useCache: false,
+    });
+
+    if (!result || result.statusCode !== 200) {
+      return [];
+    }
+
+    const content = await streamToText(result.stream);
+    return normalizeLeads(JSON.parse(content));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      console.error("Parse blob leads failed:", error);
+      return [];
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.toLowerCase().includes("not found")) {
+      return [];
+    }
+
+    throw new LeadStorageError(`读取 Vercel Blob 联系方式失败：${message}`);
   }
 }
 
-async function listVercelKvLeads() {
-  const payload = await vercelKvPipeline<string[]>([
-    ["LRANGE", VERCEL_KV_LEADS_KEY, "0", "499"],
-  ]);
-  const values = payload[0]?.result ?? [];
-
-  return values.map(parseLead).filter((lead): lead is Lead => Boolean(lead));
+async function writeBlobLeads(leads: Lead[]) {
+  try {
+    await put(BLOB_LEADS_PATH, JSON.stringify(leads.slice(0, 500), null, 2), {
+      access: "private",
+      allowOverwrite: true,
+      contentType: "application/json; charset=utf-8",
+      cacheControlMaxAge: 60,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new LeadStorageError(`写入 Vercel Blob 联系方式失败：${message}`);
+  }
 }
 
-async function createVercelKvLead(lead: Lead) {
-  await vercelKvPipeline([
-    ["LPUSH", VERCEL_KV_LEADS_KEY, JSON.stringify(lead)],
-    ["LTRIM", VERCEL_KV_LEADS_KEY, "0", "499"],
-  ]);
-
+async function createBlobLead(lead: Lead) {
+  const leads = await readBlobLeads();
+  leads.unshift(lead);
+  await writeBlobLeads(leads);
   return lead;
 }
 
 async function readLocalLeads() {
   try {
     const content = await readFile(LEADS_FILE, "utf8");
-    const leads = JSON.parse(content) as Lead[];
-    return Array.isArray(leads) ? leads : [];
+    return normalizeLeads(JSON.parse(content));
   } catch {
     return [];
   }
@@ -146,8 +164,8 @@ async function createLocalLead(lead: Lead) {
 export async function listLeads() {
   assertProductionStorage();
 
-  if (hasVercelKvConfig()) {
-    return listVercelKvLeads();
+  if (hasVercelBlobConfig()) {
+    return readBlobLeads();
   }
 
   return readLocalLeads();
@@ -162,8 +180,8 @@ export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
     ...input,
   };
 
-  if (hasVercelKvConfig()) {
-    return createVercelKvLead(lead);
+  if (hasVercelBlobConfig()) {
+    return createBlobLead(lead);
   }
 
   return createLocalLead(lead);

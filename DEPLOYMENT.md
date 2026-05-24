@@ -13,24 +13,23 @@ ADMIN_PASSWORD=改成一个强密码
 
 不要把 `.env.local` 上传到 GitHub。
 
-## 2. 联系方式保存使用 Vercel KV
+## 2. 联系方式保存使用 Vercel Blob
 
-本项目现在不用 Supabase。线上联系方式保存走 Vercel KV。
+本项目不使用 Redis、Upstash 或 Supabase。线上联系方式保存走 Vercel Blob。
 
-你需要在 Vercel 项目里创建并连接 KV 存储。连接后，Vercel 会自动添加这些环境变量：
+你需要在 Vercel 项目里创建并连接 Blob 存储。连接后，Vercel 会自动添加：
 
 ```env
-KV_REST_API_URL=Vercel 自动生成
-KV_REST_API_TOKEN=Vercel 自动生成
+BLOB_READ_WRITE_TOKEN=Vercel 自动生成
 ```
 
 可选变量：
 
 ```env
-VERCEL_KV_LEADS_KEY=baodan:leads
+BLOB_LEADS_PATH=admin/leads.json
 ```
 
-不填也可以，默认就是 `baodan:leads`。
+不填也可以，默认就是 `admin/leads.json`。
 
 ## 3. 后台地址
 
