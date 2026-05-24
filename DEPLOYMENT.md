@@ -1,8 +1,8 @@
 # 上线说明
 
-## 1. 必填环境变量
+## 1. Vercel 必填环境变量
 
-上线平台里需要配置：
+在 Vercel 项目里配置：
 
 ```env
 OPENAI_API_KEY=你的 OpenAI API Key
@@ -11,7 +11,13 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=改成一个强密码
 ```
 
-如果要让联系方式上线后不丢失，还需要配置 Supabase：
+不要把 `.env.local` 上传到 GitHub。
+
+## 2. 联系方式保存必须配置 Supabase
+
+Vercel 线上环境不能稳定写入本地文件，也不能用内存保存用户联系方式。
+
+如果要让“提交联系方式”后能在 `/admin/leads` 后台看到，必须配置 Supabase：
 
 ```env
 SUPABASE_URL=https://你的项目.supabase.co
@@ -19,11 +25,11 @@ SUPABASE_SERVICE_ROLE_KEY=你的 service_role key
 SUPABASE_LEADS_TABLE=leads
 ```
 
-不要把 `.env.local` 上传到 GitHub。
+其中 `SUPABASE_SERVICE_ROLE_KEY` 只放在 Vercel 环境变量里，不会暴露给前端网页用户。
 
-## 2. Supabase 数据表
+## 3. Supabase 建表 SQL
 
-在 Supabase SQL Editor 里执行：
+在 Supabase 的 SQL Editor 里执行：
 
 ```sql
 create table if not exists public.leads (
@@ -40,9 +46,9 @@ create index if not exists leads_created_at_idx on public.leads (created_at desc
 alter table public.leads enable row level security;
 ```
 
-本项目用服务端 `SUPABASE_SERVICE_ROLE_KEY` 写入和读取线索，不会把 key 暴露给前端。
+本项目使用服务端 `SUPABASE_SERVICE_ROLE_KEY` 写入和读取线索，所以不需要开放前端匿名写入策略。
 
-## 3. 后台地址
+## 4. 后台地址
 
 后台地址：
 
@@ -52,7 +58,7 @@ alter table public.leads enable row level security;
 
 浏览器会弹出账号密码框。本地默认账号是 `admin`，密码是 `admin123`。生产环境必须设置 `ADMIN_PASSWORD`，否则后台会锁定。
 
-## 4. 上传限制
+## 5. 上传限制
 
 当前支持：
 
@@ -66,13 +72,14 @@ alter table public.leads enable row level security;
 
 大小限制：20MB。
 
-## 5. 上线前测试
+## 6. 上线前测试
 
 至少测试：
 
 - 保险计划书 PDF 能分析出 3 条结果
+- Word DOCX 能分析出 3 条结果
 - 图片截图能分析
 - 超大文件会被拦截
 - 联系方式能提交
-- `/admin/leads` 能看到线索
-- 没有登录密码时不能进入后台
+- `/admin/leads` 能看到联系方式线索
+- 没有后台账号密码时不能进入后台

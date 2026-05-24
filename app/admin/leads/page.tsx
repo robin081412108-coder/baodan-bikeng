@@ -1,4 +1,4 @@
-import { listLeads } from "@/lib/leads";
+import { isLeadStorageConfigured, LeadStorageError, listLeads, type Lead } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,28 @@ function formatTime(value: string) {
   }
 }
 
+async function loadLeads() {
+  try {
+    return {
+      leads: await listLeads(),
+      error: "",
+    };
+  } catch (error) {
+    console.error("Admin leads load error:", error);
+
+    return {
+      leads: [] as Lead[],
+      error:
+        error instanceof LeadStorageError
+          ? error.message
+          : "后台读取联系方式失败，请稍后刷新重试。",
+    };
+  }
+}
+
 export default async function LeadsPage() {
-  const leads = await listLeads();
+  const { leads, error } = await loadLeads();
+  const storageConfigured = isLeadStorageConfigured();
 
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-8">
@@ -27,6 +47,20 @@ export default async function LeadsPage() {
           </div>
           <p className="text-sm text-slate-500">共 {leads.length} 条</p>
         </div>
+
+        {!storageConfigured || error ? (
+          <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-900">
+            <p className="font-semibold">联系方式还没有接入持久化数据库</p>
+            <p className="mt-2 leading-7">
+              {error ||
+                "生产环境需要配置 Supabase 后，用户提交的微信或邮箱才会稳定保存并显示在这里。"}
+            </p>
+            <p className="mt-2 leading-7">
+              请在 Vercel 环境变量中配置 SUPABASE_URL、SUPABASE_SERVICE_ROLE_KEY 和
+              SUPABASE_LEADS_TABLE，并在 Supabase 里创建 leads 表。
+            </p>
+          </div>
+        ) : null}
 
         {leads.length === 0 ? (
           <div className="mt-8 rounded-lg border border-slate-200 bg-white p-8 text-slate-600 shadow-sm">

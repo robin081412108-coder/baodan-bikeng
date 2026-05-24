@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createLead, listLeads } from "@/lib/leads";
+import { createLead, LeadStorageError, listLeads } from "@/lib/leads";
 
 export const runtime = "nodejs";
 
@@ -9,6 +9,14 @@ export async function GET() {
     return NextResponse.json({ leads });
   } catch (error) {
     console.error("List leads error:", error);
+
+    if (error instanceof LeadStorageError) {
+      return NextResponse.json(
+        { error: "联系方式保存通道暂未配置，请稍后再试。" },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json({ error: "读取联系方式失败。" }, { status: 500 });
   }
 }
@@ -38,6 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, lead });
   } catch (error) {
     console.error("Create lead error:", error);
+
+    if (error instanceof LeadStorageError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
+
     return NextResponse.json({ error: "提交失败，请稍后再试。" }, { status: 500 });
   }
 }

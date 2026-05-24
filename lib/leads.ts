@@ -19,27 +19,31 @@ type SupabaseLeadRow = {
   document_type: string | null;
 };
 
+export class LeadStorageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LeadStorageError";
+  }
+}
+
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const SUPABASE_TABLE = process.env.SUPABASE_LEADS_TABLE || "leads";
-const globalLeads = globalThis as typeof globalThis & {
-  __baodanLeads?: Lead[];
-};
 
 function hasSupabaseConfig() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-function getMemoryLeads() {
-  if (!globalLeads.__baodanLeads) {
-    globalLeads.__baodanLeads = [];
-  }
-
-  return globalLeads.__baodanLeads;
+function isProduction() {
+  return process.env.NODE_ENV === "production";
 }
 
-function shouldUseLocalFile() {
-  return process.env.NODE_ENV !== "production";
+function assertProductionStorage() {
+  if (isProduction() && !hasSupabaseConfig()) {
+    throw new LeadStorageError(
+      "生产环境未配置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY，无法持久保存联系方式。",
+    );
+  }
 }
 
 function toLead(row: SupabaseLeadRow): Lead {
@@ -58,7 +62,7 @@ async function supabaseFetch(pathname: string, init?: RequestInit) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
-    throw new Error("Missing Supabase config");
+    throw new LeadStorageError("缺少 Supabase 配置。");
   }
 
   const response = await fetch(`${url.replace(/\/$/, "")}/rest/v1/${pathname}`, {
@@ -73,7 +77,7 @@ async function supabaseFetch(pathname: string, init?: RequestInit) {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Supabase request failed: ${response.status} ${text}`);
+    throw new LeadStorageError(`Supabase 请求失败：${response.status} ${text}`);
   }
 
   return response;
@@ -131,34 +135,23 @@ async function createLocalLead(lead: Lead) {
   return lead;
 }
 
-function listMemoryLeads() {
-  return getMemoryLeads();
-}
-
-function createMemoryLead(lead: Lead) {
-  const leads = getMemoryLeads();
-  leads.unshift(lead);
-  return lead;
+export function isLeadStorageConfigured() {
+  return !isProduction() || hasSupabaseConfig();
 }
 
 export async function listLeads() {
+  assertProductionStorage();
+
   if (hasSupabaseConfig()) {
-    try {
-      return await listSupabaseLeads();
-    } catch (error) {
-      console.error("List Supabase leads failed:", error);
-      return listMemoryLeads();
-    }
+    return listSupabaseLeads();
   }
 
-  if (shouldUseLocalFile()) {
-    return readLocalLeads();
-  }
-
-  return listMemoryLeads();
+  return readLocalLeads();
 }
 
 export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
+  assertProductionStorage();
+
   const lead: Lead = {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
@@ -166,22 +159,8 @@ export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
   };
 
   if (hasSupabaseConfig()) {
-    try {
-      return await createSupabaseLead(lead);
-    } catch (error) {
-      console.error("Create Supabase lead failed:", error);
-      return createMemoryLead(lead);
-    }
+    return createSupabaseLead(lead);
   }
 
-  if (shouldUseLocalFile()) {
-    try {
-      return await createLocalLead(lead);
-    } catch (error) {
-      console.error("Create local lead failed:", error);
-      return createMemoryLead(lead);
-    }
-  }
-
-  return createMemoryLead(lead);
+  return createLocalLead(lead);
 }
