@@ -6,7 +6,7 @@
 
 ```env
 OPENAI_API_KEY=你的 OpenAI API Key
-OPENAI_MODEL=gpt-5
+OPENAI_MODEL=gpt-5-mini
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=改成一个强密码
 ```

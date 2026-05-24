@@ -4,7 +4,9 @@ export const runtime = "nodejs";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const MODEL = process.env.OPENAI_MODEL || "gpt-5";
+const configuredModel = process.env.OPENAI_MODEL?.trim();
+const MODEL =
+  !configuredModel || configuredModel === "gpt-5" ? "gpt-5-mini" : configuredModel;
 
 const friendlyAnalyzeError =
   "本次自动分析失败，请稍后重试，或换一份更清晰的文件再试。";
@@ -308,6 +310,10 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: MODEL,
+        reasoning: {
+          effort: "minimal",
+        },
+        max_output_tokens: 1800,
         instructions:
           "你是一个保险资料风险提示工具。所有输出字段必须使用简体中文，不得使用英文、繁体中文、拼音或中英混杂表达，除非文件原文中的产品名或专有名词必须保留。只基于用户上传文件中能看到的事实做初步风险提示。不要做购买建议、退保建议、产品推荐，不评价产品好坏。不要使用骗局、垃圾、一定亏、一定赚等情绪化或绝对化词语。输出必须强、有冲击力，但只能靠文件里的数字和条款事实产生冲击力，不能编造。优先提取金额、保费、现金价值、年度、等待期、免责条件、赔付比例、医院范围、领取年龄、演示档位等具体数字。每个注意点都要写得具体、有数字、有对比。whyItMatters 字段必须针对该风险举一个具体例子：例如第几年退保、累计已交多少钱、现金价值或可领取金额是多少、差额是多少；如果文件里能看到银行定存、保底利率、演示利率或可合理作为对照的低风险金额/利率，再写出和该对照相比少了多少。不得编造文件没有的利率或金额；如果缺少关键数字，就明确写“文件未提供某某数字，因此暂时无法算出具体差额”。如果文件没有对应数字，要明确写出缺少什么数字或条款。只输出 3 个注意点。若文件不是保险相关资料，documentType 返回无法判断，并说明无法从文件中提取保险事实。",
         input: [
