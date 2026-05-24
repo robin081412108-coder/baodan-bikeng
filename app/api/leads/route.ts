@@ -11,10 +11,7 @@ export async function GET() {
     console.error("List leads error:", error);
 
     if (error instanceof LeadStorageError) {
-      return NextResponse.json(
-        { error: "联系方式保存通道暂未配置，请稍后再试。" },
-        { status: 503 },
-      );
+      return NextResponse.json({ error: error.message }, { status: 503 });
     }
 
     return NextResponse.json({ error: "读取联系方式失败。" }, { status: 500 });

@@ -13,42 +13,26 @@ ADMIN_PASSWORD=改成一个强密码
 
 不要把 `.env.local` 上传到 GitHub。
 
-## 2. 联系方式保存必须配置 Supabase
+## 2. 联系方式保存使用 Vercel KV
 
-Vercel 线上环境不能稳定写入本地文件，也不能用内存保存用户联系方式。
+本项目现在不用 Supabase。线上联系方式保存走 Vercel KV。
 
-如果要让“提交联系方式”后能在 `/admin/leads` 后台看到，必须配置 Supabase：
+你需要在 Vercel 项目里创建并连接 KV 存储。连接后，Vercel 会自动添加这些环境变量：
 
 ```env
-SUPABASE_URL=https://你的项目.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=你的 service_role key
-SUPABASE_LEADS_TABLE=leads
+KV_REST_API_URL=Vercel 自动生成
+KV_REST_API_TOKEN=Vercel 自动生成
 ```
 
-其中 `SUPABASE_SERVICE_ROLE_KEY` 只放在 Vercel 环境变量里，不会暴露给前端网页用户。
+可选变量：
 
-## 3. Supabase 建表 SQL
-
-在 Supabase 的 SQL Editor 里执行：
-
-```sql
-create table if not exists public.leads (
-  id uuid primary key,
-  created_at timestamptz not null default now(),
-  contact text not null,
-  question text,
-  file_name text,
-  document_type text
-);
-
-create index if not exists leads_created_at_idx on public.leads (created_at desc);
-
-alter table public.leads enable row level security;
+```env
+VERCEL_KV_LEADS_KEY=baodan:leads
 ```
 
-本项目使用服务端 `SUPABASE_SERVICE_ROLE_KEY` 写入和读取线索，所以不需要开放前端匿名写入策略。
+不填也可以，默认就是 `baodan:leads`。
 
-## 4. 后台地址
+## 3. 后台地址
 
 后台地址：
 
@@ -58,7 +42,7 @@ alter table public.leads enable row level security;
 
 浏览器会弹出账号密码框。本地默认账号是 `admin`，密码是 `admin123`。生产环境必须设置 `ADMIN_PASSWORD`，否则后台会锁定。
 
-## 5. 上传限制
+## 4. 上传限制
 
 当前支持：
 
@@ -72,7 +56,7 @@ alter table public.leads enable row level security;
 
 大小限制：20MB。
 
-## 6. 上线前测试
+## 5. 上线前测试
 
 至少测试：
 

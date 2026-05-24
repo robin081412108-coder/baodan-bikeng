@@ -10,14 +10,10 @@ export type Lead = {
   documentType: string;
 };
 
-type SupabaseLeadRow = {
-  id: string;
-  created_at: string;
-  contact: string;
-  question: string | null;
-  file_name: string | null;
-  document_type: string | null;
-};
+type RedisPipelineResponse<T = unknown> = Array<{
+  result?: T;
+  error?: string;
+}>;
 
 export class LeadStorageError extends Error {
   constructor(message: string) {
@@ -28,89 +24,101 @@ export class LeadStorageError extends Error {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
-const SUPABASE_TABLE = process.env.SUPABASE_LEADS_TABLE || "leads";
-
-function hasSupabaseConfig() {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-}
+const VERCEL_KV_LEADS_KEY = process.env.VERCEL_KV_LEADS_KEY || "baodan:leads";
 
 function isProduction() {
   return process.env.NODE_ENV === "production";
 }
 
+function hasVercelKvConfig() {
+  return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+}
+
+export function isLeadStorageConfigured() {
+  return !isProduction() || hasVercelKvConfig();
+}
+
 function assertProductionStorage() {
-  if (isProduction() && !hasSupabaseConfig()) {
+  if (isProduction() && !hasVercelKvConfig()) {
     throw new LeadStorageError(
-      "生产环境未配置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY，无法持久保存联系方式。",
+      "生产环境未配置 Vercel KV，无法保存联系方式。",
     );
   }
 }
 
-function toLead(row: SupabaseLeadRow): Lead {
-  return {
-    id: row.id,
-    createdAt: row.created_at,
-    contact: row.contact,
-    question: row.question ?? "",
-    fileName: row.file_name ?? "",
-    documentType: row.document_type ?? "",
-  };
-}
+async function vercelKvPipeline<T>(commands: unknown[][]) {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
 
-async function supabaseFetch(pathname: string, init?: RequestInit) {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceRoleKey) {
-    throw new LeadStorageError("缺少 Supabase 配置。");
+  if (!url || !token) {
+    throw new LeadStorageError("缺少 Vercel KV 配置。");
   }
 
-  const response = await fetch(`${url.replace(/\/$/, "")}/rest/v1/${pathname}`, {
-    ...init,
+  const response = await fetch(`${url.replace(/\/$/, "")}/pipeline`, {
+    method: "POST",
     headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
     },
+    body: JSON.stringify(commands),
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new LeadStorageError(`Supabase 请求失败：${response.status} ${text}`);
+    throw new LeadStorageError(`Vercel KV 请求失败：${response.status} ${text}`);
   }
 
-  return response;
+  const payload = (await response.json()) as RedisPipelineResponse<T>;
+  const failed = payload.find((item) => item.error);
+
+  if (failed?.error) {
+    throw new LeadStorageError(`Vercel KV 命令失败：${failed.error}`);
+  }
+
+  return payload;
 }
 
-async function listSupabaseLeads() {
-  const params = new URLSearchParams({
-    select: "id,created_at,contact,question,file_name,document_type",
-    order: "created_at.desc",
-  });
-  const response = await supabaseFetch(`${SUPABASE_TABLE}?${params.toString()}`);
-  const rows = (await response.json()) as SupabaseLeadRow[];
-  return rows.map(toLead);
+function parseLead(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  try {
+    const lead = JSON.parse(value) as Lead;
+
+    if (!lead.id || !lead.createdAt || !lead.contact) {
+      return null;
+    }
+
+    return {
+      id: String(lead.id),
+      createdAt: String(lead.createdAt),
+      contact: String(lead.contact),
+      question: String(lead.question ?? ""),
+      fileName: String(lead.fileName ?? ""),
+      documentType: String(lead.documentType ?? ""),
+    };
+  } catch {
+    return null;
+  }
 }
 
-async function createSupabaseLead(lead: Lead) {
-  const response = await supabaseFetch(SUPABASE_TABLE, {
-    method: "POST",
-    headers: {
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify({
-      id: lead.id,
-      created_at: lead.createdAt,
-      contact: lead.contact,
-      question: lead.question,
-      file_name: lead.fileName,
-      document_type: lead.documentType,
-    }),
-  });
+async function listVercelKvLeads() {
+  const payload = await vercelKvPipeline<string[]>([
+    ["LRANGE", VERCEL_KV_LEADS_KEY, "0", "499"],
+  ]);
+  const values = payload[0]?.result ?? [];
 
-  const rows = (await response.json()) as SupabaseLeadRow[];
-  return rows[0] ? toLead(rows[0]) : lead;
+  return values.map(parseLead).filter((lead): lead is Lead => Boolean(lead));
+}
+
+async function createVercelKvLead(lead: Lead) {
+  await vercelKvPipeline([
+    ["LPUSH", VERCEL_KV_LEADS_KEY, JSON.stringify(lead)],
+    ["LTRIM", VERCEL_KV_LEADS_KEY, "0", "499"],
+  ]);
+
+  return lead;
 }
 
 async function readLocalLeads() {
@@ -135,15 +143,11 @@ async function createLocalLead(lead: Lead) {
   return lead;
 }
 
-export function isLeadStorageConfigured() {
-  return !isProduction() || hasSupabaseConfig();
-}
-
 export async function listLeads() {
   assertProductionStorage();
 
-  if (hasSupabaseConfig()) {
-    return listSupabaseLeads();
+  if (hasVercelKvConfig()) {
+    return listVercelKvLeads();
   }
 
   return readLocalLeads();
@@ -158,8 +162,8 @@ export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
     ...input,
   };
 
-  if (hasSupabaseConfig()) {
-    return createSupabaseLead(lead);
+  if (hasVercelKvConfig()) {
+    return createVercelKvLead(lead);
   }
 
   return createLocalLead(lead);
