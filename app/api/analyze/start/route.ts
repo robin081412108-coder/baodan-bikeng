@@ -1,19 +1,13 @@
-import { after } from "next/server";
 import { NextResponse } from "next/server";
 import {
-  createAnalysisJob,
-  failAnalysisJob,
-  completeAnalysisJob,
-} from "@/lib/analysis-jobs";
-import {
-  analyzeInsuranceFile,
   isSupportedAnalysisFile,
   logOpenAIAnalyzeError,
   MAX_ANALYSIS_FILE_SIZE,
+  startBackgroundAnalysis,
 } from "@/lib/openai-analysis";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const friendlyAnalyzeError =
   "本次自动分析失败，请稍后重试，或换一份更清晰的文件再试。";
@@ -55,17 +49,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const job = createAnalysisJob(file.name || "insurance-document");
-
-  after(async () => {
-    try {
-      const result = await analyzeInsuranceFile(file, apiKey);
-      completeAnalysisJob(job.id, result);
-    } catch (error) {
-      logOpenAIAnalyzeError(error);
-      failAnalysisJob(job.id, friendlyAnalyzeError);
-    }
-  });
-
-  return NextResponse.json({ jobId: job.id, status: job.status });
+  try {
+    const job = await startBackgroundAnalysis(file, apiKey);
+    return NextResponse.json({ jobId: job.responseId, status: "processing" });
+  } catch (error) {
+    logOpenAIAnalyzeError(error);
+    return NextResponse.json({ error: friendlyAnalyzeError }, { status: 502 });
+  }
 }
