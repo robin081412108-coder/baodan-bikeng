@@ -77,8 +77,6 @@ const materialTips = [
   "现金价值表",
   "保障责任页",
   "完整保险条款",
-  "截图或图片",
-  "Word 文件",
 ];
 
 const uploadGuideCards = [
