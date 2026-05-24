@@ -22,9 +22,24 @@ type SupabaseLeadRow = {
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const SUPABASE_TABLE = process.env.SUPABASE_LEADS_TABLE || "leads";
+const globalLeads = globalThis as typeof globalThis & {
+  __baodanLeads?: Lead[];
+};
 
 function hasSupabaseConfig() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getMemoryLeads() {
+  if (!globalLeads.__baodanLeads) {
+    globalLeads.__baodanLeads = [];
+  }
+
+  return globalLeads.__baodanLeads;
+}
+
+function shouldUseLocalFile() {
+  return process.env.NODE_ENV !== "production";
 }
 
 function toLead(row: SupabaseLeadRow): Lead {
@@ -116,12 +131,31 @@ async function createLocalLead(lead: Lead) {
   return lead;
 }
 
+function listMemoryLeads() {
+  return getMemoryLeads();
+}
+
+function createMemoryLead(lead: Lead) {
+  const leads = getMemoryLeads();
+  leads.unshift(lead);
+  return lead;
+}
+
 export async function listLeads() {
   if (hasSupabaseConfig()) {
-    return listSupabaseLeads();
+    try {
+      return await listSupabaseLeads();
+    } catch (error) {
+      console.error("List Supabase leads failed:", error);
+      return listMemoryLeads();
+    }
   }
 
-  return readLocalLeads();
+  if (shouldUseLocalFile()) {
+    return readLocalLeads();
+  }
+
+  return listMemoryLeads();
 }
 
 export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
@@ -132,8 +166,22 @@ export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
   };
 
   if (hasSupabaseConfig()) {
-    return createSupabaseLead(lead);
+    try {
+      return await createSupabaseLead(lead);
+    } catch (error) {
+      console.error("Create Supabase lead failed:", error);
+      return createMemoryLead(lead);
+    }
   }
 
-  return createLocalLead(lead);
+  if (shouldUseLocalFile()) {
+    try {
+      return await createLocalLead(lead);
+    } catch (error) {
+      console.error("Create local lead failed:", error);
+      return createMemoryLead(lead);
+    }
+  }
+
+  return createMemoryLead(lead);
 }
