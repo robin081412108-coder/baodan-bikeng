@@ -20,6 +20,19 @@ type AnalysisResult = {
   disclaimer: string;
 };
 
+type AnalysisJobResponse = {
+  jobId: string;
+  status: "processing";
+  error?: string;
+};
+
+type AnalysisJobStatus = {
+  id: string;
+  status: "processing" | "completed" | "failed";
+  result?: AnalysisResult;
+  error?: string;
+};
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.webp,.txt,.md";
 
@@ -92,6 +105,7 @@ export default function Home() {
   const [question, setQuestion] = useState("");
   const [leadStatus, setLeadStatus] = useState("");
   const [isSubmittingLead, setIsSubmittingLead] = useState(false);
+  const [analysisMessage, setAnalysisMessage] = useState("");
 
   const primaryButtonText = useMemo(() => {
     if (isAnalyzing) {
@@ -123,17 +137,18 @@ export default function Home() {
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setErrorMessage("");
+    setAnalysisMessage("已收到文件，正在排队分析，请稍等。");
 
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/analyze/start", {
         method: "POST",
         body: formData,
       });
 
-      const payload = (await response.json()) as AnalysisResult | { error?: string };
+      const payload = (await response.json()) as AnalysisJobResponse | { error?: string };
 
       if (!response.ok || ("error" in payload && payload.error)) {
         setErrorMessage(
@@ -144,15 +159,58 @@ export default function Home() {
         return;
       }
 
-      const result = payload as AnalysisResult;
-      setAnalysisResult({
-        ...result,
-        risks: result.risks.slice(0, 3),
-      });
+      const { jobId } = payload as AnalysisJobResponse;
+      setAnalysisMessage("正在分析文件，通常需要几十秒。页面会自动刷新结果。");
+
+      for (let attempt = 0; attempt < 90; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 2000));
+
+        const statusResponse = await fetch(`/api/analyze/jobs/${jobId}`, {
+          cache: "no-store",
+        });
+        const statusPayload = (await statusResponse.json()) as
+          | AnalysisJobStatus
+          | { error?: string };
+
+        if (!statusResponse.ok || ("error" in statusPayload && statusPayload.error)) {
+          setErrorMessage(
+            "error" in statusPayload && statusPayload.error
+              ? statusPayload.error
+              : "分析任务状态异常，请重新上传再试。",
+          );
+          return;
+        }
+
+        const job = statusPayload as AnalysisJobStatus;
+        if (job.status === "completed" && job.result) {
+          setAnalysisResult({
+            ...job.result,
+            risks: job.result.risks.slice(0, 3),
+          });
+          setAnalysisMessage("");
+          return;
+        }
+
+        if (job.status === "failed") {
+          setErrorMessage(job.error || "本次自动分析失败，请稍后重试。");
+          return;
+        }
+
+        if (attempt === 10) {
+          setAnalysisMessage("文件仍在分析中，PDF 页数较多时会更慢一点。");
+        }
+
+        if (attempt === 30) {
+          setAnalysisMessage("还在继续分析，请不要关闭页面。");
+        }
+      }
+
+      setErrorMessage("本次分析等待时间较长，请稍后重新上传，或换一份页数更少的资料。");
     } catch {
       setErrorMessage("本次自动分析失败，请稍后重试，或换一份更清晰的文件再试。");
     } finally {
       setIsAnalyzing(false);
+      setAnalysisMessage("");
     }
   }
 
@@ -356,7 +414,7 @@ export default function Home() {
                 <div className="flex items-center gap-4">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent" />
                   <p className="font-medium text-slate-800">
-                    正在阅读文件并提取需要注意的信息，结果仅供初步参考
+                    {analysisMessage || "正在阅读文件并提取需要注意的信息，结果仅供初步参考"}
                   </p>
                 </div>
               </div>

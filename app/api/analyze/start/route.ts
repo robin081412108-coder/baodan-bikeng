@@ -1,4 +1,10 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
+import {
+  createAnalysisJob,
+  failAnalysisJob,
+  completeAnalysisJob,
+} from "@/lib/analysis-jobs";
 import {
   analyzeInsuranceFile,
   isSupportedAnalysisFile,
@@ -49,11 +55,17 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const result = await analyzeInsuranceFile(file, apiKey);
-    return NextResponse.json(result);
-  } catch (error) {
-    logOpenAIAnalyzeError(error);
-    return NextResponse.json({ error: friendlyAnalyzeError }, { status: 502 });
-  }
+  const job = createAnalysisJob(file.name || "insurance-document");
+
+  after(async () => {
+    try {
+      const result = await analyzeInsuranceFile(file, apiKey);
+      completeAnalysisJob(job.id, result);
+    } catch (error) {
+      logOpenAIAnalyzeError(error);
+      failAnalysisJob(job.id, friendlyAnalyzeError);
+    }
+  });
+
+  return NextResponse.json({ jobId: job.id, status: job.status });
 }
