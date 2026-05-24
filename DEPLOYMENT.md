@@ -57,6 +57,7 @@ alter table public.leads enable row level security;
 当前支持：
 
 - PDF
+- Word DOCX
 - JPG / JPEG
 - PNG
 - WEBP

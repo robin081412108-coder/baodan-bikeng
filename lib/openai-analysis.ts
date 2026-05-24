@@ -1,3 +1,5 @@
+import mammoth from "mammoth";
+
 export type RiskLevel = "高" | "中" | "低";
 
 export type RiskItem = {
@@ -125,6 +127,10 @@ export function getMimeType(file: File) {
     return file.type;
   }
 
+  if (name.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+
   if (name.endsWith(".pdf")) {
     return "application/pdf";
   }
@@ -154,6 +160,7 @@ export function isSupportedAnalysisFile(file: File) {
     mimeType === "application/pdf" ||
     mimeType === "text/plain" ||
     mimeType === "text/markdown" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     mimeType === "image/jpeg" ||
     mimeType === "image/png" ||
     mimeType === "image/webp"
@@ -246,6 +253,16 @@ function hasExpectedShape(value: unknown): value is AnalysisResult {
 async function buildFileContent(file: File) {
   const mimeType = getMimeType(file);
   const bytes = Buffer.from(await file.arrayBuffer());
+
+  if (mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    const result = await mammoth.extractRawText({ buffer: bytes });
+    const text = result.value.trim();
+
+    return {
+      type: "input_text",
+      text: `用户上传 Word 文件名：${file.name}\n\n${text || "未能从 Word 文件中提取到文字内容。"}`,
+    };
+  }
 
   if (mimeType.startsWith("text/")) {
     return {

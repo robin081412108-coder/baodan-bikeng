@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   if (!isSupportedAnalysisFile(file)) {
     return NextResponse.json(
-      { error: "暂时支持 PDF、JPG、PNG、WEBP、TXT、MD 文件。请换一种格式上传。" },
+      { error: "暂时支持 PDF、Word DOCX、JPG、PNG、WEBP、TXT、MD 文件。请换一种格式上传。" },
       { status: 400 },
     );
   }

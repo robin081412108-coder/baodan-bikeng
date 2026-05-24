@@ -34,7 +34,7 @@ type AnalysisJobStatus = {
 };
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.webp,.txt,.md";
+const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.docx";
 
 const exampleRisks: RiskItem[] = [
   {
@@ -78,6 +78,7 @@ const materialTips = [
   "保障责任页",
   "完整保险条款",
   "截图或图片",
+  "Word 文件",
 ];
 
 const uploadGuideCards = [
@@ -371,7 +372,7 @@ export default function Home() {
                 </p>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-slate-500">
-                  支持 PDF、JPG、PNG、WEBP、TXT、MD；文件越清晰，识别越容易
+                  支持 PDF、Word、JPG、PNG、WEBP、TXT、MD；文件越清晰，识别越容易
                 </p>
               )}
             </label>
@@ -459,10 +460,10 @@ export default function Home() {
 
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6">
                   <h2 className="text-2xl font-bold text-slate-950">
-                    想看更详细解释或人工复核？
+                    想知道这 3 个问题该怎么问销售或客服？
                   </h2>
                   <p className="mt-2 leading-7 text-slate-600">
-                    如果你希望进一步了解这些注意点，可以留下微信或邮箱。我们后续可人工帮你整理需要进一步确认的问题清单。
+                    留下微信或邮箱，我们可以根据这次结果，帮你整理一份更好开口的确认清单：该问什么、要销售补哪几页、哪些数字一定要截图留底。
                   </p>
                   <div className="mt-5 grid gap-3 sm:grid-cols-[0.85fr_1.15fr_auto]">
                     <input
@@ -477,7 +478,7 @@ export default function Home() {
                     />
                     <input
                       type="text"
-                      placeholder="你最想了解的问题"
+                      placeholder="比如：我想知道第几年退保不亏"
                       value={question}
                       onChange={(event) => {
                         setQuestion(event.target.value);
@@ -491,7 +492,7 @@ export default function Home() {
                       disabled={isSubmittingLead}
                       className="rounded-md bg-slate-900 px-6 py-3 font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
-                      {isSubmittingLead ? "提交中" : "提交联系方式"}
+                      {isSubmittingLead ? "提交中" : "获取确认清单"}
                     </button>
                   </div>
                   {leadStatus && (
