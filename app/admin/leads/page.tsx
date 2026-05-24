@@ -1,5 +1,7 @@
 import { listLeads } from "@/lib/leads";
 
+export const dynamic = "force-dynamic";
+
 function formatTime(value: string) {
   try {
     return new Intl.DateTimeFormat("zh-CN", {
@@ -31,26 +33,28 @@ export default async function LeadsPage() {
             还没有用户提交联系方式。
           </div>
         ) : (
-          <div className="mt-8 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="grid grid-cols-[1fr_1fr_1.4fr_1fr_1fr] gap-4 border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
-              <span>提交时间</span>
-              <span>微信或邮箱</span>
-              <span>最想了解的问题</span>
-              <span>上传文件</span>
-              <span>材料类型</span>
-            </div>
-            {leads.map((lead) => (
-              <div
-                key={lead.id}
-                className="grid grid-cols-[1fr_1fr_1.4fr_1fr_1fr] gap-4 border-b border-slate-100 px-4 py-4 text-sm last:border-b-0"
-              >
-                <span className="text-slate-500">{formatTime(lead.createdAt)}</span>
-                <span className="break-all font-semibold text-slate-950">{lead.contact}</span>
-                <span className="break-words text-slate-700">{lead.question || "未填写"}</span>
-                <span className="break-all text-slate-600">{lead.fileName || "未记录"}</span>
-                <span className="text-slate-600">{lead.documentType || "未记录"}</span>
+          <div className="mt-8 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="min-w-[900px]">
+              <div className="grid grid-cols-[1fr_1fr_1.4fr_1fr_1fr] gap-4 border-b border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">
+                <span>提交时间</span>
+                <span>微信或邮箱</span>
+                <span>最想了解的问题</span>
+                <span>上传文件</span>
+                <span>材料类型</span>
               </div>
-            ))}
+              {leads.map((lead) => (
+                <div
+                  key={lead.id}
+                  className="grid grid-cols-[1fr_1fr_1.4fr_1fr_1fr] gap-4 border-b border-slate-100 px-4 py-4 text-sm last:border-b-0"
+                >
+                  <span className="text-slate-500">{formatTime(lead.createdAt)}</span>
+                  <span className="break-all font-semibold text-slate-950">{lead.contact}</span>
+                  <span className="break-words text-slate-700">{lead.question || "未填写"}</span>
+                  <span className="break-all text-slate-600">{lead.fileName || "未记录"}</span>
+                  <span className="text-slate-600">{lead.documentType || "未记录"}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
