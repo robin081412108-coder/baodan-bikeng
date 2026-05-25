@@ -22,23 +22,25 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const BLOB_LEADS_PATH = process.env.BLOB_LEADS_PATH || "admin/leads.json";
 
-function isProduction() {
-  return process.env.NODE_ENV === "production";
-}
-
 function hasVercelBlobConfig() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
-export function isLeadStorageConfigured() {
-  return !isProduction() || hasVercelBlobConfig();
+function isRunningOnVercel() {
+  return process.env.VERCEL === "1";
 }
 
-function assertProductionStorage() {
-  if (isProduction() && !hasVercelBlobConfig()) {
-    throw new LeadStorageError(
-      "生产环境未连接 Vercel Blob，暂时无法保存联系方式。",
-    );
+function shouldUseBlobStorage() {
+  return isRunningOnVercel() && hasVercelBlobConfig();
+}
+
+export function isLeadStorageConfigured() {
+  return !isRunningOnVercel() || hasVercelBlobConfig();
+}
+
+function assertStorageConfigured() {
+  if (isRunningOnVercel() && !hasVercelBlobConfig()) {
+    throw new LeadStorageError("Vercel 尚未连接 Blob，暂时无法保存联系方式。");
   }
 }
 
@@ -115,7 +117,7 @@ async function readBlobLeads() {
       return [];
     }
 
-    throw new LeadStorageError(`读取 Vercel Blob 联系方式失败：${message}`);
+    throw new LeadStorageError(`读取联系方式失败：${message}`);
   }
 }
 
@@ -129,7 +131,7 @@ async function writeBlobLeads(leads: Lead[]) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new LeadStorageError(`写入 Vercel Blob 联系方式失败：${message}`);
+    throw new LeadStorageError(`保存联系方式失败：${message}`);
   }
 }
 
@@ -151,7 +153,7 @@ async function readLocalLeads() {
 
 async function writeLocalLeads(leads: Lead[]) {
   await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(LEADS_FILE, `${JSON.stringify(leads, null, 2)}\n`, "utf8");
+  await writeFile(LEADS_FILE, `${JSON.stringify(leads.slice(0, 500), null, 2)}\n`, "utf8");
 }
 
 async function createLocalLead(lead: Lead) {
@@ -162,9 +164,9 @@ async function createLocalLead(lead: Lead) {
 }
 
 export async function listLeads() {
-  assertProductionStorage();
+  assertStorageConfigured();
 
-  if (hasVercelBlobConfig()) {
+  if (shouldUseBlobStorage()) {
     return readBlobLeads();
   }
 
@@ -172,7 +174,7 @@ export async function listLeads() {
 }
 
 export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
-  assertProductionStorage();
+  assertStorageConfigured();
 
   const lead: Lead = {
     id: crypto.randomUUID(),
@@ -180,7 +182,7 @@ export async function createLead(input: Omit<Lead, "id" | "createdAt">) {
     ...input,
   };
 
-  if (hasVercelBlobConfig()) {
+  if (shouldUseBlobStorage()) {
     return createBlobLead(lead);
   }
 

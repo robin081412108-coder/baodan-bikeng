@@ -50,14 +50,8 @@ export default async function LeadsPage() {
 
         {!storageConfigured || error ? (
           <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-900">
-            <p className="font-semibold">Vercel Blob 保存通道还没配置好</p>
-            <p className="mt-2 leading-7">
-              {error || "请先在 Vercel 项目里创建并连接 Blob 存储。"}
-            </p>
-            <p className="mt-2 leading-7">
-              配好后，用户提交的微信或邮箱会保存在 Vercel Blob，后台会从同一个
-              leads.json 文件读取。
-            </p>
+            <p className="font-semibold">联系方式保存通道尚未可用</p>
+            <p className="mt-2 leading-7">{error || "请检查服务器保存配置后刷新。"}</p>
           </div>
         ) : null}
 
