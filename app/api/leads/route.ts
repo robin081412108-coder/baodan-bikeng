@@ -1,22 +1,7 @@
 import { NextResponse } from "next/server";
-import { createLead, LeadStorageError, listLeads } from "@/lib/leads";
+import { createLead, LeadStorageError } from "@/lib/leads";
 
 export const runtime = "nodejs";
-
-export async function GET() {
-  try {
-    const leads = await listLeads();
-    return NextResponse.json({ leads });
-  } catch (error) {
-    console.error("List leads error:", error);
-
-    if (error instanceof LeadStorageError) {
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-
-    return NextResponse.json({ error: "读取联系方式失败。" }, { status: 500 });
-  }
-}
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as {
