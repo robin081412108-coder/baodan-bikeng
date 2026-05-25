@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   isSupportedAnalysisFile,
-  logOpenAIAnalyzeError,
+  logQwenAnalyzeError,
   MAX_ANALYSIS_FILE_SIZE,
-  startBackgroundAnalysis,
-} from "@/lib/openai-analysis";
+  startQwenAnalysis,
+} from "@/lib/qwen-analysis";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -12,13 +12,13 @@ export const maxDuration = 60;
 const friendlyAnalyzeError =
   "本次自动分析失败，请稍后重试，或换一份更清晰的文件再试。";
 const missingApiKeyError =
-  "服务端未配置 OPENAI_API_KEY。请在项目根目录的 .env.local 里添加 OPENAI_API_KEY，然后重启 npm run dev。";
+  "服务端未配置 DASHSCOPE_API_KEY。请在项目根目录的 .env.local 里添加 DASHSCOPE_API_KEY，然后重启 npm run dev。";
 
 export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.DASHSCOPE_API_KEY;
 
   if (!apiKey) {
-    logOpenAIAnalyzeError(new Error("Missing OPENAI_API_KEY"));
+    logQwenAnalyzeError(new Error("Missing DASHSCOPE_API_KEY"));
     return NextResponse.json(
       {
         error:
@@ -44,16 +44,16 @@ export async function POST(request: Request) {
 
   if (!isSupportedAnalysisFile(file)) {
     return NextResponse.json(
-      { error: "暂时支持 PDF、Word DOCX、JPG、PNG、WEBP、TXT、MD 文件。请换一种格式上传。" },
+      { error: "暂时支持 PDF、Word DOCX、JPG、PNG、TXT、MD 文件。请换一种格式上传。" },
       { status: 400 },
     );
   }
 
   try {
-    const job = await startBackgroundAnalysis(file, apiKey);
-    return NextResponse.json({ jobId: job.responseId, status: "processing" });
+    const job = await startQwenAnalysis(file, apiKey);
+    return NextResponse.json({ jobId: job.fileId, status: "processing" });
   } catch (error) {
-    logOpenAIAnalyzeError(error);
+    logQwenAnalyzeError(error);
     return NextResponse.json({ error: friendlyAnalyzeError }, { status: 502 });
   }
 }

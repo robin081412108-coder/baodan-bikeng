@@ -34,7 +34,7 @@ type AnalysisJobStatus = {
 };
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
-const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.docx";
+const ACCEPTED_FILE_TYPES = ".pdf,.jpg,.jpeg,.png,.txt,.md,.docx";
 
 const exampleRisks: RiskItem[] = [
   {
@@ -370,7 +370,7 @@ export default function Home() {
                 </p>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-slate-500">
-                  支持 PDF、Word、JPG、PNG、WEBP、TXT、MD；文件越清晰，识别越容易
+                  支持 PDF、Word、JPG、PNG、TXT、MD；文件越清晰，识别越容易
                 </p>
               )}
             </label>

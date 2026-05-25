@@ -1,69 +1,70 @@
-# 阿里云香港上线说明
+# 阿里云香港 + 百炼千问上线说明
 
-## 方案说明
+## 当前方案
 
-本项目可部署到一台阿里云轻量应用服务器（中国香港）：
-
-- 网页和后端接口都运行在香港服务器
-- 服务器端调用 OpenAI API，用户浏览器不会看到 API Key
-- 联系方式在轻量测试期直接保存到服务器硬盘的 `data/leads.json`
+- 网站运行在阿里云轻量应用服务器（中国香港）
+- 文档分析调用阿里云百炼中国内地（北京）地域的 `qwen-long`
+- 上传资料由网站转发给百炼解析，分析结束后请求删除临时文件
+- 联系方式在试运行阶段保存到服务器硬盘的 `data/leads.json`
 - 后台地址为 `/admin/leads`
 
-香港服务器上的联系方式文件需要定期备份。用户量变大后，再将线索迁移到数据库。
+## 百炼配置
 
-## 建议购买配置
+在阿里云控制台进入大模型服务平台百炼，使用中国内地（北京）地域：
 
-- 地域：中国香港
-- 镜像：Ubuntu 22.04 LTS 或 Ubuntu 24.04 LTS
-- 配置：入门套餐即可；能选 2 GB 内存则优先 2 GB
-- 时长：先买 1 个月测试
+1. 开通百炼服务。
+2. 在模型广场找到并开通 `qwen-long`，若控制台提示开通模型。
+3. 在 API Key 管理中创建 API Key。
+4. 记录 API Key，仅填写到服务器 `.env.local`，不要提交到 GitHub。
+5. 在费用或用量管理中设置预算预警或额度控制，避免测试期超出预期费用。
+
+`qwen-long` 官方文件输入支持 PDF、DOCX、TXT、MD、PNG、JPG/JPEG 等格式。
 
 ## 服务器环境变量
 
-在服务器项目目录创建 `.env.local`，内容为：
+在服务器项目目录创建 `.env.local`：
 
 ```env
-OPENAI_API_KEY=你的 OpenAI API Key
-OPENAI_MODEL=gpt-5-mini
+DASHSCOPE_API_KEY=你的百炼API_Key
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-long
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=改成一个只有你知道的强密码
 ```
 
-不要把 `.env.local` 上传到 GitHub，也不要把 API Key 发给任何人。
-
-## 首次部署命令
-
-登录 Ubuntu 服务器后执行：
+## 服务器安装与部署
 
 ```bash
-sudo apt update
-sudo apt install -y nginx git curl
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-sudo npm install -g pm2
-sudo mkdir -p /var/www
-sudo chown -R $USER:$USER /var/www
+sudo -i
+apt update
+apt install -y nginx git curl
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
+npm install -g pm2
+
+mkdir -p /var/www
 cd /var/www
 git clone https://github.com/robin081412108-coder/baodan-bikeng.git
 cd baodan-bikeng
 npm install
+nano .env.local
 npm run build
+
 pm2 start npm --name baodan-bikeng -- start
 pm2 save
-pm2 startup
+pm2 startup systemd -u root --hp /root
+pm2 save
 ```
 
-`pm2 startup` 会打印一行需要再次执行的命令，复制执行那一行，然后再次运行 `pm2 save`。
+## Nginx 公网访问配置
 
-## Nginx 反向代理
+执行：
 
-先用服务器公网 IP 访问时，将下列内容保存为 `/etc/nginx/sites-available/baodan-bikeng`：
-
-```nginx
+```bash
+cat > /etc/nginx/sites-available/baodan-bikeng <<'EOF'
 server {
     listen 80;
     server_name _;
-
     client_max_body_size 25M;
 
     location / {
@@ -75,30 +76,36 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
+EOF
+
+ln -sf /etc/nginx/sites-available/baodan-bikeng /etc/nginx/sites-enabled/baodan-bikeng
+rm -f /etc/nginx/sites-enabled/default
+nginx -t
+systemctl enable nginx
+systemctl restart nginx
 ```
 
-启用配置：
+随后在阿里云轻量应用服务器防火墙添加 TCP 端口：
 
-```bash
-sudo ln -s /etc/nginx/sites-available/baodan-bikeng /etc/nginx/sites-enabled/baodan-bikeng
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
-```
+- `80`：HTTP 网页访问
+- `443`：后续绑定 HTTPS 时使用
 
-完成后浏览器打开：
+## 测试与后台
+
+使用服务器公网 IP 打开：
 
 ```text
 http://你的服务器公网IP
-```
-
-## 后台和数据备份
-
-后台地址：
-
-```text
 http://你的服务器公网IP/admin/leads
 ```
+
+测试至少包含：
+
+- PDF 分析并显示 3 条结果
+- Word DOCX 分析并显示 3 条结果
+- JPG 或 PNG 截图分析
+- 联系方式提交后在后台显示
+- 手机流量访问首页和分析流程
 
 联系方式数据文件：
 
@@ -106,26 +113,28 @@ http://你的服务器公网IP/admin/leads
 /var/www/baodan-bikeng/data/leads.json
 ```
 
-测试期间可定期在服务器执行：
+测试期间可定期备份：
 
 ```bash
 cp /var/www/baodan-bikeng/data/leads.json ~/leads-backup.json
 ```
 
-## 绑定域名和 HTTPS
-
-公网 IP 测试通过后，再购买并解析域名到服务器 IP。域名生效后可使用 Certbot 免费申请 HTTPS 证书：
+## 后续更新网站
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d 你的域名
+sudo -i
+cd /var/www/baodan-bikeng
+git pull origin master
+npm install
+npm run build
+pm2 restart baodan-bikeng
 ```
 
-## 上线前测试
+## 域名与 HTTPS
 
-- PDF 能分析出 3 条结果
-- Word DOCX 能分析出 3 条结果
-- 图片截图能分析
-- 联系方式提交后，后台能看到记录
-- 后台必须输入你设置的密码才能进入
-- 手机移动网络能够顺畅访问首页并上传资料
+IP 测试通过后再绑定域名并申请免费 HTTPS 证书：
+
+```bash
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d 你的域名
+```
