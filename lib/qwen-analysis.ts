@@ -324,7 +324,6 @@ async function queryFile(fileId: string, apiKey: string) {
         },
       },
       temperature: 0.1,
-      max_tokens: 2600,
     }),
     cache: "no-store",
   });
