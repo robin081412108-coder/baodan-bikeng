@@ -90,6 +90,8 @@ const systemPrompt =
 const userPrompt =
   "请分析该文件并返回 3 个最值得用户进一步确认的注意点。缺失的正式条款或关键数字请写入 missingInfo。每条必须包含风险标题、风险等级、文件中看到的事实、通俗解释为什么需要注意、进一步需要确认什么。";
 
+type ResponseFormatMode = "json_schema" | "json_object" | "prompt_only";
+
 export function logQwenAnalyzeError(error: unknown) {
   console.error("Qwen analyze error:", error);
 
@@ -301,7 +303,32 @@ function scheduleFileCleanup(fileId: string, apiKey: string) {
   scheduledCleanups.__qwenFileCleanupTimers.set(fileId, timer);
 }
 
-async function queryFile(fileId: string, apiKey: string) {
+function buildResponseFormat(mode: ResponseFormatMode) {
+  if (mode === "json_schema") {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "insurance_risk_analysis",
+        description: "保险资料初步风险提示的固定结构化输出",
+        strict: true,
+        schema: resultSchema,
+      },
+    };
+  }
+
+  if (mode === "json_object") {
+    return { type: "json_object" };
+  }
+
+  return undefined;
+}
+
+async function requestFileAnalysis(
+  fileId: string,
+  apiKey: string,
+  mode: ResponseFormatMode,
+) {
+  const responseFormat = buildResponseFormat(mode);
   const response = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -315,46 +342,60 @@ async function queryFile(fileId: string, apiKey: string) {
         { role: "system", content: `fileid://${fileId}` },
         { role: "user", content: userPrompt },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "insurance_risk_analysis",
-          strict: true,
-          schema: resultSchema,
-        },
-      },
+      ...(responseFormat ? { response_format: responseFormat } : {}),
       temperature: 0.1,
     }),
     cache: "no-store",
   });
 
   const rawResponse = await response.text();
+  return { response, rawResponse };
+}
 
-  if (!response.ok) {
+async function queryFile(fileId: string, apiKey: string) {
+  const modes: ResponseFormatMode[] = ["json_schema", "json_object", "prompt_only"];
+
+  for (const [index, mode] of modes.entries()) {
+    const { response, rawResponse } = await requestFileAnalysis(fileId, apiKey, mode);
+
     if (rawResponse.toLowerCase().includes("file parsing in progress")) {
       return { status: "processing" as const };
     }
 
-    logQwenAnalyzeError({
-      status: response.status,
-      message: response.statusText,
-      response: rawResponse,
-    });
-    throw new Error("Qwen analysis request failed");
+    if (!response.ok) {
+      const mayRetryOutputFormat =
+        response.status === 400 &&
+        rawResponse.toLowerCase().includes("response_format") &&
+        index < modes.length - 1;
+
+      if (mayRetryOutputFormat) {
+        console.warn(`Qwen rejected ${mode} output format, retrying with fallback format.`);
+        continue;
+      }
+
+      logQwenAnalyzeError({
+        status: response.status,
+        message: response.statusText,
+        response: rawResponse,
+      });
+      throw new Error("Qwen analysis request failed");
+    }
+
+    const payload = JSON.parse(rawResponse) as unknown;
+    const content = extractContent(payload);
+
+    if (!content) {
+      console.error("Qwen analysis returned empty content:", rawResponse);
+      throw new Error("Qwen returned empty content");
+    }
+
+    return {
+      status: "completed" as const,
+      result: parseResult(content),
+    };
   }
 
-  const payload = JSON.parse(rawResponse) as unknown;
-  const content = extractContent(payload);
-
-  if (!content) {
-    console.error("Qwen analysis returned empty content:", rawResponse);
-    throw new Error("Qwen returned empty content");
-  }
-
-  return {
-    status: "completed" as const,
-    result: parseResult(content),
-  };
+  throw new Error("Qwen analysis request failed");
 }
 
 export async function startQwenAnalysis(file: File, apiKey: string) {
