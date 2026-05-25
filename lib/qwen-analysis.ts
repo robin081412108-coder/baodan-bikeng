@@ -28,69 +28,28 @@ const scheduledCleanups = globalThis as typeof globalThis & {
   __qwenFileCleanupTimers?: Map<string, ReturnType<typeof setTimeout>>;
 };
 
-const resultSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "documentType",
-    "materialCompleteness",
-    "missingInfo",
-    "risks",
-    "disclaimer",
-  ],
-  properties: {
-    documentType: {
-      type: "string",
-      enum: ["保险计划书", "产品说明书", "利益演示表", "保险条款", "无法判断"],
-    },
-    materialCompleteness: {
-      type: "string",
-      enum: ["高", "中", "低"],
-    },
-    missingInfo: {
-      type: "array",
-      items: { type: "string" },
-    },
-    risks: {
-      type: "array",
-      minItems: 3,
-      maxItems: 3,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: [
-          "riskTitle",
-          "riskLevel",
-          "factFromDocument",
-          "whyItMatters",
-          "needToConfirm",
-        ],
-        properties: {
-          riskTitle: { type: "string" },
-          riskLevel: {
-            type: "string",
-            enum: ["高", "中", "低"],
-          },
-          factFromDocument: { type: "string" },
-          whyItMatters: { type: "string" },
-          needToConfirm: { type: "string" },
-        },
-      },
-    },
-    disclaimer: {
-      type: "string",
-      enum: [disclaimerText],
-    },
-  },
-};
-
 const systemPrompt =
   "你是一个保险资料初步风险提示工具。所有输出必须使用中国大陆常用简体中文，写给不懂保险的普通人看。只依据上传文件能看到的事实，不做购买建议、退保建议或产品推荐，不评价产品好坏，不使用“骗局”“垃圾”“一定亏”“一定赚”等绝对化表达。优先摘取保费、现金价值、年度、演示利益、等待期、免责条件、医院范围、赔付比例等数字或条款。术语后必须立即用白话解释，例如“现金价值就是中途退保大概能拿回的钱”。每个注意点的 whyItMatters 必须举文件数字能够支持的具体例子，例如累计交多少钱、退保可拿多少钱、差额多少；没有数字就明确说文件缺少数字，不能编造。若文件不是保险资料，documentType 返回“无法判断”，仍用三条提示说明不能提取哪些保险事实。只返回符合要求的 JSON，不要输出 Markdown。";
 
 const userPrompt =
-  "请分析该文件并返回 3 个最值得用户进一步确认的注意点。缺失的正式条款或关键数字请写入 missingInfo。每条必须包含风险标题、风险等级、文件中看到的事实、通俗解释为什么需要注意、进一步需要确认什么。";
-
-type ResponseFormatMode = "json_schema" | "json_object" | "prompt_only";
+  `请分析该文件并返回 3 个最值得用户进一步确认的注意点。缺失的正式条款或关键数字请写入 missingInfo。每条必须包含风险标题、风险等级、文件中看到的事实、通俗解释为什么需要注意、进一步需要确认什么。
+只输出一个可被 JSON.parse 直接解析的 JSON 对象，不要 Markdown 代码围栏、解释文字或额外字段。格式必须严格为：
+{
+  "documentType": "保险计划书 / 产品说明书 / 利益演示表 / 保险条款 / 无法判断",
+  "materialCompleteness": "高 / 中 / 低",
+  "missingInfo": ["缺失信息1", "缺失信息2"],
+  "risks": [
+    {
+      "riskTitle": "风险标题",
+      "riskLevel": "高 / 中 / 低",
+      "factFromDocument": "文件中看到的事实",
+      "whyItMatters": "通俗且尽可能带数字的具体说明",
+      "needToConfirm": "进一步需要确认什么"
+    }
+  ],
+  "disclaimer": "本结果仅供初步参考，不构成保险、法律、投资、购买或退保建议。"
+}
+risks 必须正好有 3 项。`;
 
 export function logQwenAnalyzeError(error: unknown) {
   console.error("Qwen analyze error:", error);
@@ -303,32 +262,7 @@ function scheduleFileCleanup(fileId: string, apiKey: string) {
   scheduledCleanups.__qwenFileCleanupTimers.set(fileId, timer);
 }
 
-function buildResponseFormat(mode: ResponseFormatMode) {
-  if (mode === "json_schema") {
-    return {
-      type: "json_schema",
-      json_schema: {
-        name: "insurance_risk_analysis",
-        description: "保险资料初步风险提示的固定结构化输出",
-        strict: true,
-        schema: resultSchema,
-      },
-    };
-  }
-
-  if (mode === "json_object") {
-    return { type: "json_object" };
-  }
-
-  return undefined;
-}
-
-async function requestFileAnalysis(
-  fileId: string,
-  apiKey: string,
-  mode: ResponseFormatMode,
-) {
-  const responseFormat = buildResponseFormat(mode);
+async function queryFile(fileId: string, apiKey: string) {
   const response = await fetch(`${DASHSCOPE_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -342,60 +276,38 @@ async function requestFileAnalysis(
         { role: "system", content: `fileid://${fileId}` },
         { role: "user", content: userPrompt },
       ],
-      ...(responseFormat ? { response_format: responseFormat } : {}),
       temperature: 0.1,
     }),
     cache: "no-store",
   });
 
   const rawResponse = await response.text();
-  return { response, rawResponse };
-}
 
-async function queryFile(fileId: string, apiKey: string) {
-  const modes: ResponseFormatMode[] = ["json_schema", "json_object", "prompt_only"];
-
-  for (const [index, mode] of modes.entries()) {
-    const { response, rawResponse } = await requestFileAnalysis(fileId, apiKey, mode);
-
-    if (rawResponse.toLowerCase().includes("file parsing in progress")) {
-      return { status: "processing" as const };
-    }
-
-    if (!response.ok) {
-      const mayRetryOutputFormat =
-        response.status === 400 &&
-        rawResponse.toLowerCase().includes("response_format") &&
-        index < modes.length - 1;
-
-      if (mayRetryOutputFormat) {
-        console.warn(`Qwen rejected ${mode} output format, retrying with fallback format.`);
-        continue;
-      }
-
-      logQwenAnalyzeError({
-        status: response.status,
-        message: response.statusText,
-        response: rawResponse,
-      });
-      throw new Error("Qwen analysis request failed");
-    }
-
-    const payload = JSON.parse(rawResponse) as unknown;
-    const content = extractContent(payload);
-
-    if (!content) {
-      console.error("Qwen analysis returned empty content:", rawResponse);
-      throw new Error("Qwen returned empty content");
-    }
-
-    return {
-      status: "completed" as const,
-      result: parseResult(content),
-    };
+  if (rawResponse.toLowerCase().includes("file parsing in progress")) {
+    return { status: "processing" as const };
   }
 
-  throw new Error("Qwen analysis request failed");
+  if (!response.ok) {
+    logQwenAnalyzeError({
+      status: response.status,
+      message: response.statusText,
+      response: rawResponse,
+    });
+    throw new Error("Qwen analysis request failed");
+  }
+
+  const payload = JSON.parse(rawResponse) as unknown;
+  const content = extractContent(payload);
+
+  if (!content) {
+    console.error("Qwen analysis returned empty content:", rawResponse);
+    throw new Error("Qwen returned empty content");
+  }
+
+  return {
+    status: "completed" as const,
+    result: parseResult(content),
+  };
 }
 
 export async function startQwenAnalysis(file: File, apiKey: string) {
