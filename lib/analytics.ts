@@ -28,15 +28,9 @@ export function trackEvent(category: string, action: string, label?: string) {
 
   const body = JSON.stringify(payload);
 
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon("/api/events", new Blob([body], { type: "application/json" }));
-    return;
-  }
-
   void fetch("/api/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
-    keepalive: true,
   }).catch(() => undefined);
 }

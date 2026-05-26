@@ -91,6 +91,10 @@ function getCount(events: SiteEvent[], category: string, action: string) {
   return events.filter((event) => event.category === category && event.action === action).length;
 }
 
+function getCountByPairs(events: SiteEvent[], pairs: Array<[string, string]>) {
+  return pairs.reduce((total, [category, action]) => total + getCount(events, category, action), 0);
+}
+
 function percent(part: number, total: number) {
   if (!total) {
     return "0%";
@@ -100,7 +104,9 @@ function percent(part: number, total: number) {
 }
 
 export default async function EventsPage() {
-  const events = await listEvents();
+  const events = (await listEvents()).filter(
+    (event) => !(event.category === "页面" && event.path.startsWith("/admin")),
+  );
   const todayEvents = events.filter((event) => isToday(event.createdAt));
   const allCounts = countByEvent(events);
   const pathCounts = countByPath(events);
@@ -110,7 +116,11 @@ export default async function EventsPage() {
   const selectedFiles = getCount(events, "初筛流程", "选择文件");
   const analysisStarted = getCount(events, "初筛流程", "开始分析");
   const analysisCompleted = getCount(events, "初筛流程", "分析成功");
-  const reportInterest = getCount(events, "详细报告", "点击意向按钮");
+  const reportInterest = getCountByPairs(events, [
+    ["详细报告", "点击意向按钮"],
+    ["详细报告", "点击获取详细报告"],
+    ["详细报告", "点击详细报告"],
+  ]);
   const leadSubmitted = getCount(events, "留资", "提交成功");
 
   return (
@@ -196,7 +206,7 @@ export default async function EventsPage() {
         </section>
 
         <p className="mt-5 text-sm leading-7 text-slate-500">
-          这里仅记录匿名行为动作与页面路径，不记录上传文件内容、联系方式、分析结果或 IP 地址。百度统计仍可用于查看大盘访问来源。
+          这里仅记录匿名行为动作与页面路径，不记录上传文件内容、联系方式、分析结果或 IP 地址；后台访问已从统计口径中排除。百度统计仍可用于查看大盘访问来源。
         </p>
       </div>
     </main>

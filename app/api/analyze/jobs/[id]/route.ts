@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logQwenAnalyzeError, retrieveQwenAnalysis } from "@/lib/qwen-analysis";
+import { createEvent } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -20,6 +21,12 @@ export async function GET(
     const status = await retrieveQwenAnalysis(id, apiKey);
 
     if (status.status === "completed") {
+      await createEvent({
+        category: "初筛流程",
+        action: "分析成功",
+        path: "/",
+      }).catch((eventError) => console.error("Create analysis completed event error:", eventError));
+
       return NextResponse.json({
         id,
         status: "completed",

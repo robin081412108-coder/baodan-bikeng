@@ -5,6 +5,7 @@ import {
   MAX_ANALYSIS_FILE_SIZE,
   startQwenAnalysis,
 } from "@/lib/qwen-analysis";
+import { createEvent } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,6 +52,11 @@ export async function POST(request: Request) {
 
   try {
     const job = await startQwenAnalysis(file, apiKey);
+    await createEvent({
+      category: "初筛流程",
+      action: "开始分析",
+      path: "/",
+    }).catch((eventError) => console.error("Create analysis start event error:", eventError));
     return NextResponse.json({ jobId: job.fileId, status: "processing" });
   } catch (error) {
     logQwenAnalyzeError(error);

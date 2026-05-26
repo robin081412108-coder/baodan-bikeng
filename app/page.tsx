@@ -141,7 +141,6 @@ export default function Home() {
     setErrorMessage("");
     setAnalysisMessage("已收到文件，正在排队分析，请稍等。");
     setIsDetailedReportInterested(false);
-    trackEvent("初筛流程", "开始分析");
 
     try {
       const formData = new FormData();
@@ -191,7 +190,6 @@ export default function Home() {
             ...job.result,
             risks: job.result.risks.slice(0, 3),
           });
-          trackEvent("初筛流程", "分析成功");
           setAnalysisMessage("");
           return;
         }
@@ -250,7 +248,6 @@ export default function Home() {
       }
 
       setLeadStatus("已提交，我们会根据这份结果整理需要进一步确认的问题。");
-      trackEvent("留资", "提交成功");
       setContact("");
       setQuestion("");
     } catch {

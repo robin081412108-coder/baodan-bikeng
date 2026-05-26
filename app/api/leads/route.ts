@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createLead, LeadStorageError } from "@/lib/leads";
+import { createEvent } from "@/lib/events";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,11 @@ export async function POST(request: Request) {
       fileName: String(payload.fileName ?? "").trim(),
       documentType: String(payload.documentType ?? "").trim(),
     });
+    await createEvent({
+      category: "留资",
+      action: "提交成功",
+      path: "/",
+    }).catch((eventError) => console.error("Create lead submit event error:", eventError));
 
     return NextResponse.json({ ok: true, lead });
   } catch (error) {

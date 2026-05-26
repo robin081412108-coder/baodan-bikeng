@@ -8,6 +8,10 @@ export function AnalyticsPageView() {
   const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname.startsWith("/admin")) {
+      return;
+    }
+
     trackEvent("页面", "访问", pathname);
   }, [pathname]);
 
