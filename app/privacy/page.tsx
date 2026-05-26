@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "隐私与资料使用说明",
+  description: "了解上传保险资料前的脱敏要求、文件处理方式与联系方式使用范围。",
+  alternates: {
+    canonical: "/privacy",
+  },
+};
+
 export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-900 sm:px-8">
@@ -32,6 +42,16 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-bold text-slate-950">结果边界</h2>
           <p>
             本工具生成内容仅供初步参考，不构成保险建议、法律建议、投资建议、购买建议或退保建议。具体保障责任、现金价值、免责条款、退保金额和理赔条件，请以正式保险合同和保险公司文件为准。
+          </p>
+        </section>
+
+        <section className="mt-8 space-y-4 text-slate-700">
+          <h2 className="text-xl font-bold text-slate-950">访问统计</h2>
+          <p>
+            为了解页面访问和功能使用效果，本网站使用百度统计记录页面访问及匿名操作事件，例如点击初筛、开始分析、分析成功和点击详细报告意向按钮。
+          </p>
+          <p>
+            统计事件不会主动发送你上传的文件内容、文件名、分析结果、微信号、邮箱或你填写的问题内容。
           </p>
         </section>
       </article>

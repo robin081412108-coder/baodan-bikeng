@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 
 type RiskLevel = "高" | "中" | "低";
 
@@ -105,6 +107,7 @@ export default function Home() {
   const [leadStatus, setLeadStatus] = useState("");
   const [isSubmittingLead, setIsSubmittingLead] = useState(false);
   const [analysisMessage, setAnalysisMessage] = useState("");
+  const [isDetailedReportInterested, setIsDetailedReportInterested] = useState(false);
 
   const primaryButtonText = useMemo(() => {
     if (isAnalyzing) {
@@ -137,6 +140,8 @@ export default function Home() {
     setAnalysisResult(null);
     setErrorMessage("");
     setAnalysisMessage("已收到文件，正在排队分析，请稍等。");
+    setIsDetailedReportInterested(false);
+    trackEvent("初筛流程", "开始分析");
 
     try {
       const formData = new FormData();
@@ -186,6 +191,7 @@ export default function Home() {
             ...job.result,
             risks: job.result.risks.slice(0, 3),
           });
+          trackEvent("初筛流程", "分析成功");
           setAnalysisMessage("");
           return;
         }
@@ -244,6 +250,7 @@ export default function Home() {
       }
 
       setLeadStatus("已提交，我们会根据这份结果整理需要进一步确认的问题。");
+      trackEvent("留资", "提交成功");
       setContact("");
       setQuestion("");
     } catch {
@@ -251,6 +258,14 @@ export default function Home() {
     } finally {
       setIsSubmittingLead(false);
     }
+  }
+
+  function handleDetailedReportInterest() {
+    if (!isDetailedReportInterested) {
+      trackEvent("详细报告", "点击意向按钮");
+    }
+
+    setIsDetailedReportInterested(true);
   }
 
   return (
@@ -263,6 +278,7 @@ export default function Home() {
           </div>
           <a
             href="#upload"
+            onClick={() => trackEvent("首页", "点击免费初筛", "导航栏")}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
           >
             开始免费初筛
@@ -280,11 +296,12 @@ export default function Home() {
               助你找出风险点
             </h1>
             <p className="mt-8 max-w-2xl text-lg font-semibold leading-9 text-amber-700">
-              精准找出销售最不想让你知道的雷点
+              基于保险资料事实，先看清需要重点确认的金额与条款
             </p>
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
               <a
                 href="#upload"
+                onClick={() => trackEvent("首页", "点击免费初筛", "首屏按钮")}
                 className="inline-flex whitespace-nowrap justify-center rounded-md bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-800"
               >
                 开始免费初筛
@@ -356,6 +373,10 @@ export default function Home() {
                   setSelectedFile(file);
                   setAnalysisResult(null);
                   setErrorMessage("");
+                  setIsDetailedReportInterested(false);
+                  if (file) {
+                    trackEvent("初筛流程", "选择文件");
+                  }
                 }}
               />
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-white text-lg font-bold text-emerald-700 shadow-sm">
@@ -456,6 +477,38 @@ export default function Home() {
                   ))}
                 </div>
 
+                <div className="rounded-lg border border-emerald-200 bg-white p-6 shadow-sm">
+                  <p className="text-sm font-semibold text-emerald-700">详细报告功能筹备中</p>
+                  <h2 className="mt-2 text-2xl font-bold text-slate-950">想看更详细的逐项解读？</h2>
+                  <p className="mt-3 max-w-3xl leading-7 text-slate-600">
+                    未来的详细报告将进一步整理关键金额对照、保证与非保证利益区分、需要补看的条款位置，以及向销售或客服进一步确认的问题清单。
+                  </p>
+                  <div className="mt-5 grid gap-3 text-sm text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      "关键保费与现金价值对照",
+                      "保证与非保证利益拆分",
+                      "条款缺失与关注位置",
+                      "进一步确认问题清单",
+                    ].map((item) => (
+                      <div key={item} className="rounded-md bg-emerald-50 px-4 py-3">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDetailedReportInterest}
+                    className="mt-6 rounded-md bg-emerald-700 px-6 py-3 font-semibold text-white transition hover:bg-emerald-800"
+                  >
+                    {isDetailedReportInterested ? "已记录：我想看详细报告" : "我想看详细报告"}
+                  </button>
+                  {isDetailedReportInterested && (
+                    <p className="mt-4 rounded-md bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                      详细报告目前正在准备中，当前不收费。你可以在下方自愿留下联系方式，功能开放后优先获得通知。
+                    </p>
+                  )}
+                </div>
+
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6">
                   <h2 className="text-2xl font-bold text-slate-950">
                     想知道这 3 个问题该怎么问销售或客服？
@@ -517,6 +570,56 @@ export default function Home() {
                 <h3 className="font-semibold text-slate-950">{card.title}</h3>
                 <p className="mt-3 text-sm leading-7 text-slate-600">{card.text}</p>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 py-12 sm:px-8">
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-700">资料阅读指南</p>
+              <h2 className="mt-2 text-3xl font-bold text-slate-950">先了解最常见的确认重点</h2>
+            </div>
+            <Link
+              href="/guides"
+              className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+            >
+              查看全部指南
+            </Link>
+          </div>
+          <div className="mt-7 grid gap-4 md:grid-cols-2">
+            {[
+              {
+                href: "/guides/insurance-plan-reading",
+                title: "保险计划书怎么看？",
+                text: "先找到保费、现金价值、保障责任和关键限制。",
+              },
+              {
+                href: "/guides/cash-value-refund",
+                title: "现金价值和退保金额怎么看？",
+                text: "用具体数字看累计保费与可能拿回金额的差距。",
+              },
+              {
+                href: "/guides/illustrated-vs-guaranteed-benefits",
+                title: "演示收益是不是保证的？",
+                text: "区分写在表里的演示数字和真正保证的金额。",
+              },
+              {
+                href: "/guides/privacy-before-upload",
+                title: "上传资料前怎样遮挡隐私？",
+                text: "了解可以上传什么，以及哪些信息应先遮住。",
+              },
+            ].map((guide) => (
+              <Link
+                key={guide.href}
+                href={guide.href}
+                className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:border-emerald-300"
+              >
+                <h3 className="font-semibold text-slate-950">{guide.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-slate-600">{guide.text}</p>
+              </Link>
             ))}
           </div>
         </div>

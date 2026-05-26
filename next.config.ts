@@ -1,7 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  poweredByHeader: false,
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "baoxianjiance.cn" }],
+        destination: "https://www.baoxianjiance.cn/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

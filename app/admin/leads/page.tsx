@@ -1,6 +1,14 @@
+import type { Metadata } from "next";
 import { isLeadStorageConfigured, LeadStorageError, listLeads, type Lead } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "联系方式后台",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 function formatTime(value: string) {
   try {
