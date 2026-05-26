@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { isLeadStorageConfigured, LeadStorageError, listLeads, type Lead } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,12 @@ export default async function LeadsPage() {
             <p className="text-sm font-semibold text-emerald-700">保单避坑助手后台</p>
             <h1 className="mt-2 text-3xl font-bold text-slate-950">联系方式线索</h1>
           </div>
-          <p className="text-sm text-slate-500">共 {leads.length} 条</p>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <p className="text-sm text-slate-500">共 {leads.length} 条</p>
+            <Link href="/admin/events" className="text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+              查看行为统计
+            </Link>
+          </div>
         </div>
 
         {!storageConfigured || error ? (

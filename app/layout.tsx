@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AnalyticsPageView } from "./analytics-page-view";
 import "./globals.css";
 
 const siteUrl = "https://www.baoxianjiance.cn";
@@ -67,6 +68,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
+        <AnalyticsPageView />
         {children}
       </body>
     </html>
