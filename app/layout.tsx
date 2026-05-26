@@ -51,6 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+        <meta name="baidu-site-verification" content="codeva-cDzYevrQjW" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
