@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 import "./globals.css";
 
 const siteUrl = "https://www.baoxianjiance.cn";
@@ -51,19 +50,23 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              var _hmt = _hmt || [];
+              (function() {
+                var hm = document.createElement("script");
+                hm.src = "https://hm.baidu.com/hm.js?1f2430d9ff55451972357d67e388f200";
+                var s = document.getElementsByTagName("script")[0];
+                s.parentNode.insertBefore(hm, s);
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
-        <Script id="baidu-tongji" strategy="afterInteractive">
-          {`
-            var _hmt = _hmt || [];
-            (function() {
-              var hm = document.createElement("script");
-              hm.src = "https://hm.baidu.com/hm.js?1f2430d9ff55451972357d67e388f200";
-              var s = document.getElementsByTagName("script")[0];
-              s.parentNode.insertBefore(hm, s);
-            })();
-          `}
-        </Script>
       </body>
     </html>
   );
