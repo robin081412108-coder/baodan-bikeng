@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 
 type RiskLevel = "高" | "中" | "低";
@@ -108,6 +108,7 @@ export default function Home() {
   const [isSubmittingLead, setIsSubmittingLead] = useState(false);
   const [analysisMessage, setAnalysisMessage] = useState("");
   const [isDetailedReportInterested, setIsDetailedReportInterested] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const primaryButtonText = useMemo(() => {
     if (isAnalyzing) {
@@ -128,6 +129,20 @@ export default function Home() {
 
     return "开始初步识别";
   }, [analysisResult, isAnalyzing, privacyConfirmed, selectedFile]);
+
+  function handleSelectedFile(file: File | null) {
+    setSelectedFile(file);
+    setAnalysisResult(null);
+    setErrorMessage("");
+    setIsDetailedReportInterested(false);
+  }
+
+  function openFilePicker() {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  }
 
   async function handleAnalyze() {
     if (!privacyConfirmed || isAnalyzing) {
@@ -368,17 +383,23 @@ export default function Home() {
               </span>
             </div>
 
-            <label className="mt-6 block cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center transition hover:border-emerald-500 hover:bg-emerald-50/50">
+            <div
+              onDragOver={(event) => {
+                event.preventDefault();
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleSelectedFile(event.dataTransfer.files?.[0] ?? null);
+              }}
+              className="mt-6 block rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center transition hover:border-emerald-500 hover:bg-emerald-50/50"
+            >
               <input
+                ref={fileInputRef}
                 type="file"
                 accept={ACCEPTED_FILE_TYPES}
                 className="sr-only"
                 onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setSelectedFile(file);
-                  setAnalysisResult(null);
-                  setErrorMessage("");
-                  setIsDetailedReportInterested(false);
+                  handleSelectedFile(event.target.files?.[0] ?? null);
                 }}
               />
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-white text-lg font-bold text-emerald-700 shadow-sm">
@@ -387,6 +408,13 @@ export default function Home() {
               <p className="mt-4 text-base font-semibold text-slate-900">
                 选择或拖放保险资料文件
               </p>
+              <button
+                type="button"
+                onClick={openFilePicker}
+                className="mt-4 rounded-md bg-white px-5 py-2 text-sm font-semibold text-emerald-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-emerald-50"
+              >
+                选择文件
+              </button>
               {selectedFile ? (
                 <p className="mt-3 break-all text-sm leading-6 text-emerald-700">
                   已选择：{selectedFile.name}
@@ -396,7 +424,7 @@ export default function Home() {
                   支持 PDF、Word、JPG、PNG、TXT、MD；文件越清晰，识别越容易
                 </p>
               )}
-            </label>
+            </div>
 
             <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
               <input
