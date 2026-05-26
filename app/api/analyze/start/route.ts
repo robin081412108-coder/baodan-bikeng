@@ -50,6 +50,12 @@ export async function POST(request: Request) {
     );
   }
 
+  await createEvent({
+    category: "初筛流程",
+    action: "选择文件",
+    path: "/",
+  }).catch((eventError) => console.error("Create file selected event error:", eventError));
+
   try {
     const job = await startQwenAnalysis(file, apiKey);
     await createEvent({

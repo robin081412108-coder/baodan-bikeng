@@ -114,12 +114,20 @@ export default function Home() {
       return "识别中";
     }
 
+    if (!selectedFile) {
+      return "请先选择文件";
+    }
+
+    if (!privacyConfirmed) {
+      return "请先勾选确认";
+    }
+
     if (analysisResult) {
       return "重新初筛";
     }
 
     return "开始初步识别";
-  }, [analysisResult, isAnalyzing]);
+  }, [analysisResult, isAnalyzing, privacyConfirmed, selectedFile]);
 
   async function handleAnalyze() {
     if (!privacyConfirmed || isAnalyzing) {
@@ -371,9 +379,6 @@ export default function Home() {
                   setAnalysisResult(null);
                   setErrorMessage("");
                   setIsDetailedReportInterested(false);
-                  if (file) {
-                    trackEvent("初筛流程", "选择文件");
-                  }
                 }}
               />
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-white text-lg font-bold text-emerald-700 shadow-sm">
@@ -414,7 +419,7 @@ export default function Home() {
             <button
               type="button"
               onClick={handleAnalyze}
-              disabled={!privacyConfirmed || isAnalyzing}
+              disabled={!selectedFile || !privacyConfirmed || isAnalyzing}
               className="mt-5 w-full rounded-md bg-emerald-700 px-5 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
               {primaryButtonText}
