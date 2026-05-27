@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { APP_VERSION } from "@/lib/app-info";
 
 type RiskLevel = "高" | "中" | "低";
 
@@ -667,6 +668,7 @@ export default function Home() {
           >
             查看隐私与资料使用说明
           </a>
+          <p className="mt-3 text-xs text-slate-400">版本 {APP_VERSION}</p>
         </div>
       </footer>
     </main>

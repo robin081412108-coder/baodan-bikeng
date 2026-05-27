@@ -21,6 +21,9 @@ export class LeadStorageError extends Error {
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const BLOB_LEADS_PATH = process.env.BLOB_LEADS_PATH || "admin/leads.json";
+const leadWriteState = globalThis as typeof globalThis & {
+  __baodanLeadWriteQueue?: Promise<unknown>;
+};
 
 function hasVercelBlobConfig() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
@@ -157,9 +160,17 @@ async function writeLocalLeads(leads: Lead[]) {
 }
 
 async function createLocalLead(lead: Lead) {
-  const leads = await readLocalLeads();
-  leads.unshift(lead);
-  await writeLocalLeads(leads);
+  const previousWrite = leadWriteState.__baodanLeadWriteQueue ?? Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(async () => {
+      const leads = await readLocalLeads();
+      leads.unshift(lead);
+      await writeLocalLeads(leads);
+    });
+
+  leadWriteState.__baodanLeadWriteQueue = nextWrite;
+  await nextWrite;
   return lead;
 }
 

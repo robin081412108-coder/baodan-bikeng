@@ -40,6 +40,12 @@ export async function GET(
     });
   } catch (error) {
     logQwenAnalyzeError(error);
+    await createEvent({
+      category: "初筛流程",
+      action: "分析失败",
+      label: "poll",
+      path: "/",
+    }).catch((eventError) => console.error("Create analysis failed event error:", eventError));
     return NextResponse.json(
       { error: "本次自动分析失败，请稍后重试，或换一份更清晰的文件再试。" },
       { status: 502 },

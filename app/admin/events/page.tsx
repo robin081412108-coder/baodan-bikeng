@@ -116,6 +116,7 @@ export default async function EventsPage() {
   const selectedFiles = getCount(events, "初筛流程", "选择文件");
   const analysisStarted = getCount(events, "初筛流程", "开始分析");
   const analysisCompleted = getCount(events, "初筛流程", "分析成功");
+  const analysisFailed = getCount(events, "初筛流程", "分析失败");
   const reportInterest = getCountByPairs(events, [
     ["详细报告", "点击意向按钮"],
     ["详细报告", "点击获取详细报告"],
@@ -166,6 +167,18 @@ export default async function EventsPage() {
                 <p className="mt-1 text-sm text-emerald-700">{item.rate}</p>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-5 text-amber-900">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold">分析失败次数</h2>
+              <p className="mt-1 text-sm leading-6">
+                这里记录上传接口或结果轮询失败，方便排查模型、文件格式或服务器问题。
+              </p>
+            </div>
+            <p className="text-3xl font-bold">{analysisFailed}</p>
           </div>
         </section>
 

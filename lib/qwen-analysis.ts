@@ -117,30 +117,110 @@ function authorizationHeader(apiKey: string) {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
-function hasExpectedShape(value: unknown): value is AnalysisResult {
+function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object") {
     return false;
   }
 
-  const result = value as Partial<AnalysisResult>;
+  return !Array.isArray(value);
+}
 
-  return (
-    typeof result.documentType === "string" &&
-    typeof result.materialCompleteness === "string" &&
-    Array.isArray(result.missingInfo) &&
-    Array.isArray(result.risks) &&
-    result.risks.length === 3 &&
-    result.risks.every(
-      (risk) =>
-        risk &&
-        typeof risk.riskTitle === "string" &&
-        typeof risk.riskLevel === "string" &&
-        typeof risk.factFromDocument === "string" &&
-        typeof risk.whyItMatters === "string" &&
-        typeof risk.needToConfirm === "string",
-    ) &&
-    typeof result.disclaimer === "string"
-  );
+function cleanModelText(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function normalizeRiskLevel(value: unknown): RiskLevel {
+  const text = cleanModelText(value);
+
+  if (text.includes("高")) {
+    return "高";
+  }
+
+  if (text.includes("低")) {
+    return "低";
+  }
+
+  return "中";
+}
+
+function normalizeCompleteness(value: unknown) {
+  const text = cleanModelText(value);
+
+  if (text.includes("高")) {
+    return "高";
+  }
+
+  if (text.includes("低")) {
+    return "低";
+  }
+
+  return "中";
+}
+
+function fallbackRisk(index: number): RiskItem {
+  return {
+    riskTitle: `资料信息不足，需补充确认 ${index + 1}`,
+    riskLevel: "中",
+    factFromDocument: "当前文件中没有看到足够清晰的金额、条款或责任说明。",
+    whyItMatters: "如果资料缺少关键数字或正式条款，就无法判断实际退保金额、保障范围和理赔限制，容易只看到展示页上的概括信息。",
+    needToConfirm: "请补充保险计划书、完整条款、现金价值表、责任免除页或产品说明书后再确认。",
+  };
+}
+
+function normalizeResult(value: unknown): AnalysisResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const rawRisks = Array.isArray(value.risks) ? value.risks : [];
+  const risks = rawRisks
+    .filter(isRecord)
+    .slice(0, 3)
+    .map((risk, index) => ({
+      riskTitle: cleanModelText(risk.riskTitle, fallbackRisk(index).riskTitle),
+      riskLevel: normalizeRiskLevel(risk.riskLevel),
+      factFromDocument: cleanModelText(
+        risk.factFromDocument,
+        fallbackRisk(index).factFromDocument,
+      ),
+      whyItMatters: cleanModelText(risk.whyItMatters, fallbackRisk(index).whyItMatters),
+      needToConfirm: cleanModelText(
+        risk.needToConfirm,
+        fallbackRisk(index).needToConfirm,
+      ),
+    }));
+
+  while (risks.length < 3) {
+    risks.push(fallbackRisk(risks.length));
+  }
+
+  return {
+    documentType: cleanModelText(value.documentType, "无法判断"),
+    materialCompleteness: normalizeCompleteness(value.materialCompleteness),
+    missingInfo: Array.isArray(value.missingInfo)
+      ? value.missingInfo.map((item) => cleanModelText(item)).filter(Boolean).slice(0, 6)
+      : ["未看到足够完整的正式条款或关键数字"],
+    risks,
+    disclaimer: disclaimerText,
+  };
+}
+
+function extractJsonText(rawContent: string) {
+  const content = rawContent
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  const firstBrace = content.indexOf("{");
+  const lastBrace = content.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return content;
+  }
+
+  return content.slice(firstBrace, lastBrace + 1);
 }
 
 function extractContent(payload: unknown) {
@@ -167,10 +247,7 @@ function extractContent(payload: unknown) {
 }
 
 function parseResult(rawContent: string) {
-  const content = rawContent
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "");
+  const content = extractJsonText(rawContent);
 
   let parsed: unknown;
 
@@ -182,16 +259,14 @@ function parseResult(rawContent: string) {
     throw new Error("Qwen JSON parse failed");
   }
 
-  if (!hasExpectedShape(parsed)) {
+  const normalized = normalizeResult(parsed);
+
+  if (!normalized) {
     console.error("Qwen result JSON shape mismatch:", rawContent);
     throw new Error("Qwen JSON shape mismatch");
   }
 
-  return {
-    ...parsed,
-    risks: parsed.risks.slice(0, 3),
-    disclaimer: disclaimerText,
-  };
+  return normalized;
 }
 
 async function uploadFile(file: File, apiKey: string) {

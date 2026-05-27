@@ -16,6 +16,9 @@ export type SiteEvent = {
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const EVENTS_FILE = path.join(DATA_DIR, "events.json");
+const eventWriteState = globalThis as typeof globalThis & {
+  __baodanEventWriteQueue?: Promise<unknown>;
+};
 
 function cleanText(value: unknown, maxLength = 120) {
   return String(value ?? "")
@@ -105,8 +108,16 @@ export async function createEvent(input: {
     campaign: cleanText(input.campaign, 80),
   };
 
-  const events = await readEvents();
-  events.unshift(event);
-  await writeEvents(events);
+  const previousWrite = eventWriteState.__baodanEventWriteQueue ?? Promise.resolve();
+  const nextWrite = previousWrite
+    .catch(() => undefined)
+    .then(async () => {
+      const events = await readEvents();
+      events.unshift(event);
+      await writeEvents(events);
+    });
+
+  eventWriteState.__baodanEventWriteQueue = nextWrite;
+  await nextWrite;
   return event;
 }

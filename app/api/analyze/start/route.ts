@@ -66,6 +66,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ jobId: job.fileId, status: "processing" });
   } catch (error) {
     logQwenAnalyzeError(error);
+    await createEvent({
+      category: "初筛流程",
+      action: "分析失败",
+      label: "start",
+      path: "/",
+    }).catch((eventError) => console.error("Create analysis failed event error:", eventError));
     return NextResponse.json({ error: friendlyAnalyzeError }, { status: 502 });
   }
 }

@@ -32,7 +32,7 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=改成一个只有你知道的强密码
 ```
 
-## 服务器安装与部署
+## 服务器安装与首次部署
 
 ```bash
 sudo -i
@@ -50,7 +50,7 @@ npm install
 nano .env.local
 npm run build
 
-pm2 start npm --name baodan-bikeng -- start
+pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
 pm2 startup systemd -u root --hp /root
 pm2 save
@@ -122,13 +122,32 @@ cp /var/www/baodan-bikeng/data/leads.json ~/leads-backup.json
 ## 后续更新网站
 
 ```bash
-sudo -i
 cd /var/www/baodan-bikeng
+git config --global --add safe.directory /var/www/baodan-bikeng
+sudo chown -R admin:admin /var/www/baodan-bikeng
 git pull origin master
 npm install
 npm run build
-pm2 restart baodan-bikeng
+pm2 startOrReload ecosystem.config.cjs --update-env
+pm2 save
 ```
+
+如果你使用的是 `admin` 用户，推荐直接执行项目内置脚本：
+
+```bash
+cd /var/www/baodan-bikeng
+bash scripts/deploy-server.sh
+```
+
+更新后检查：
+
+```bash
+curl http://127.0.0.1:3000/api/health
+curl -s http://127.0.0.1:3000 | grep "_next/static"
+pm2 list
+```
+
+浏览器打开网站页脚应显示最新版本号。
 
 ## 域名与 HTTPS
 
