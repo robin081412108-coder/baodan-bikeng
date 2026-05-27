@@ -14,6 +14,7 @@ git checkout master
 git pull --ff-only origin master
 
 npm install
+rm -rf .next
 npm run build
 
 mkdir -p data
